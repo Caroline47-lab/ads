@@ -738,7 +738,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
         const closeDrawerBtn = document.querySelector('.close-btn');
         const fileErrorMessage = document.getElementById('file-error-message');
 
-        // --- SEÇÃO 1: FUNÇÕES DE UTILIDADE E PARSING ---
+        // --- SEÇÃO 1: FUNÇÕES DE UTILIDADE E PARSING REFORMULADO ---
 
         /**
          * Normaliza uma string para comparação (minusculo, sem acentos, sem espacos extras).
@@ -757,7 +757,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
          * @returns {number|null}
          */
         const parseNumber = (str) => {
-            if (typeof str !== 'string') return str;
+            if (typeof str !== 'string' || str.trim() === '-' || str.trim() === '') return null;
             let normalized = str.replace(/\./g, '').replace(',', '.').trim();
             let num = parseFloat(normalized);
             return isNaN(num) ? null : num;
@@ -784,28 +784,41 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
             }
             return null;
         };
+        
+        /**
+         * Tenta detectar o delimitador de um arquivo CSV.
+         * @param {string} csvText
+         * @returns {string} O delimitador encontrado (',', ';', '\t') ou ',' como padrão.
+         */
+        const detectDelimiter = (csvText) => {
+            const firstLine = csvText.trim().split(/\r?\n/)[0];
+            const delimiters = [',', ';', '\t'];
+            let maxCount = 0;
+            let detectedDelimiter = ',';
+
+            delimiters.forEach(delimiter => {
+                const count = (firstLine.match(new RegExp(delimiter, 'g')) || []).length;
+                if (count > maxCount) {
+                    maxCount = count;
+                    detectedDelimiter = delimiter;
+                }
+            });
+
+            return detectedDelimiter;
+        };
 
         /**
          * Função principal de parsing de CSV, que detecta o delimitador.
-         * Melhorada para suportar tabulações e remover aspas.
+         * Refatorada para ser mais robusta.
          * @param {string} csvText
          * @returns {Array<Object>}
          */
         const parseCSV = (csvText) => {
             if (!csvText) return [];
             
+            const delimiter = detectDelimiter(csvText);
             const lines = csvText.trim().split(/\r?\n/);
             if (lines.length < 2) return [];
-
-            let delimiter = ',';
-            if (lines[0].includes(';')) {
-                delimiter = ';';
-            } else if (lines[0].includes('\t')) {
-                delimiter = '\t';
-            }
-
-            // A regex lida com vírgulas/pontos e aspas duplas, crucial para o formato do Meta Ads.
-            const splitRegex = new RegExp(`(?:"([^"]*(?:""[^"]*)*)"|([^${delimiter}]*))${delimiter}?`, 'g');
 
             const headers = lines[0].split(delimiter).map(h => normalizeString(h.replace(/"/g, '')));
             const data = [];
@@ -814,20 +827,49 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
                 const line = lines[i];
                 if (!line.trim()) continue;
 
-                const values = [];
+                // Regex para split que lida com aspas duplas, mesmo com o delimitador dentro
+                const regex = new RegExp(`(?:[^"${delimiter}]|"[^"]*")*?(?:${delimiter}|$)`, 'g');
                 let match;
-                while ((match = splitRegex.exec(line)) !== null) {
-                    // O grupo 1 é para valores entre aspas, o grupo 2 para valores sem aspas.
-                    // O uso de 'match[1] || match[2]' garante que o valor correto é pego, independente do tipo.
-                    values.push(match[1] ? match[1].replace(/""/g, '"') : match[2]);
+                const values = [];
+
+                // Solução mais segura para o split, que trata aspas corretamente
+                let currentIndex = 0;
+                while (currentIndex < line.length) {
+                    let nextDelimiter = line.indexOf(delimiter, currentIndex);
+                    let nextQuote = line.indexOf('"', currentIndex);
+
+                    if (nextQuote === currentIndex) { // Encontrou uma aspa no início do campo
+                        const endQuoteIndex = line.indexOf('"', currentIndex + 1);
+                        if (endQuoteIndex !== -1) {
+                            values.push(line.substring(currentIndex + 1, endQuoteIndex).replace(/""/g, '"'));
+                            currentIndex = endQuoteIndex + 1;
+                            if (line[currentIndex] === delimiter) {
+                                currentIndex++;
+                            }
+                        } else {
+                            values.push(line.substring(currentIndex + 1));
+                            currentIndex = line.length;
+                        }
+                    } else if (nextDelimiter !== -1) {
+                        values.push(line.substring(currentIndex, nextDelimiter));
+                        currentIndex = nextDelimiter + 1;
+                    } else {
+                        values.push(line.substring(currentIndex));
+                        currentIndex = line.length;
+                    }
                 }
-                
+
+                // Ajusta para o último valor
+                if (line.endsWith(delimiter)) {
+                    values.push('');
+                }
+
+                // Normaliza e mapeia os valores para o objeto de linha
                 const row = {};
                 for (let j = 0; j < headers.length && j < values.length; j++) {
                     const header = headers[j];
                     const value = values[j] ? values[j].trim() : '';
-
-                    // Normalizar valores numéricos e de data
+                    
                     let parsedValue = parseNumber(value);
                     if (parsedValue === null) {
                         parsedValue = parseDate(value);
