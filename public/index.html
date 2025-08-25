@@ -505,15 +505,13 @@
                 <h3>1. Suba seus dados</h3>
                 <div class="upload-buttons">
                     <div class="input-file">
-                        <label for="meta-csv">CSV Meta Ads</label>
-                        <span class="custom-file-upload">Selecione o arquivo</span>
-                        <input type="file" id="meta-csv" accept=".csv">
+                        <label for="meta-csv-input" class="custom-file-upload">Selecione o arquivo</label>
+                        <input type="file" id="meta-csv-input" accept=".csv">
                         <span id="meta-filename"></span>
                     </div>
                     <div class="input-file">
-                        <label for="ga4-csv">CSV GA4</label>
-                        <span class="custom-file-upload">Selecione o arquivo</span>
-                        <input type="file" id="ga4-csv" accept=".csv">
+                        <label for="ga4-csv-input" class="custom-file-upload">Selecione o arquivo</label>
+                        <input type="file" id="ga4-csv-input" accept=".csv">
                         <span id="ga4-filename"></span>
                     </div>
                 </div>
@@ -723,8 +721,8 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
         let campaignsToShow = [];
 
         // Elementos da UI
-        const metaFileInput = document.getElementById('meta-csv');
-        const ga4FileInput = document.getElementById('ga4-csv');
+        const metaFileInput = document.getElementById('meta-csv-input');
+        const ga4FileInput = document.getElementById('ga4-csv-input');
         const dashboardGrid = document.getElementById('dashboard-grid');
         const loadingMessage = document.getElementById('loading-message');
         const noDataMessage = document.getElementById('no-data-message');
@@ -1005,7 +1003,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
                 
                 let motivo = '';
                 if (Gasto >= limiteGastoSemVenda && (Resultados === 0 || Resultados === null)) {
-                    motivo = CONFIG.MESSAGES.PAUSAR_GASTO(Gasto);
+                    motivo = CONFIG.MESSAGES.PAUSAR_GASTO(Gasto.toFixed(2));
                 } else if (CPC > maxCPC && CTR < minCTR) {
                     motivo = CONFIG.MESSAGES.PAUSAR_METRICAS;
                 } else {
@@ -1172,6 +1170,11 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
             const receitaCtx = document.getElementById('receita-chart').getContext('2d');
             const decisoesCtx = document.getElementById('decisoes-chart').getContext('2d');
 
+            // Destruir gráficos existentes antes de criar novos
+            if (window.gastoChart) window.gastoChart.destroy();
+            if (window.receitaChart) window.receitaChart.destroy();
+            if (window.decisoesChart) window.decisoesChart.destroy();
+
             const campaignLabels = campaignsToShow.map(c => c.meta['Campanha'] || c.ga4['Campanha']);
             const gastoData = campaignsToShow.map(c => calculateMetrics(c).Gasto || 0);
             const receitaData = campaignsToShow.map(c => calculateMetrics(c).ReceitaGA4 || calculateMetrics(c).ReceitaMeta || 0);
@@ -1187,7 +1190,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
             });
 
             // Gasto por Campanha (Bar Chart)
-            new Chart(gastoCtx, {
+            window.gastoChart = new Chart(gastoCtx, {
                 type: 'bar',
                 data: {
                     labels: campaignLabels,
@@ -1202,7 +1205,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
             });
 
             // Receita por Campanha (Bar Chart)
-            new Chart(receitaCtx, {
+            window.receitaChart = new Chart(receitaCtx, {
                 type: 'bar',
                 data: {
                     labels: campaignLabels,
@@ -1226,7 +1229,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
                 CHART_COLORS.manter
             ];
 
-            new Chart(decisoesCtx, {
+            window.decisoesChart = new Chart(decisoesCtx, {
                 type: 'pie',
                 data: {
                     labels: pieLabels,
@@ -1244,6 +1247,14 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
             const type = config.type;
             const data = config.data;
             const options = config.options;
+            
+            // Destruir o gráfico anterior se existir
+            if (ctx.chart) {
+                ctx.chart.destroy();
+            }
+
+            ctx.chart = this;
+
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
             if (type === 'bar') {
@@ -1317,18 +1328,24 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
          */
         const processData = (source, content) => {
             hideFileError();
-            try {
-                const parsed = parseCSV(content);
-                const normalized = mapDataToNormalizedHeaders(parsed, source);
-                if (normalized.length === 0) {
-                    throw new Error("O arquivo está vazio ou o formato está incorreto.");
+            loadingMessage.style.display = 'block';
+            dashboardGrid.innerHTML = '';
+            
+            setTimeout(() => {
+                try {
+                    const parsed = parseCSV(content);
+                    const normalized = mapDataToNormalizedHeaders(parsed, source);
+                    if (normalized.length === 0) {
+                        throw new Error("O arquivo está vazio ou o formato está incorreto.");
+                    }
+                    rawData[source] = normalized;
+                    updateDashboard();
+                } catch (error) {
+                    console.error("Erro ao processar o arquivo:", error);
+                    showFileError(`Erro ao processar o arquivo: ${error.message}.`);
+                    loadingMessage.style.display = 'none';
                 }
-                rawData[source] = normalized;
-                updateDashboard();
-            } catch (error) {
-                console.error("Erro ao processar o arquivo:", error);
-                showFileError(`Erro ao processar o arquivo: ${error.message}.`);
-            }
+            }, 100);
         };
 
         /**
@@ -1406,6 +1423,12 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
         // --- SEÇÃO 7: EXPORTAÇÃO ---
         
         const exportCSV = () => {
+            // Verifica se há dados para exportar
+            if (campaignsToShow.length === 0) {
+                showFileError("Nenhum dado para exportar. Por favor, carregue os arquivos primeiro.");
+                return;
+            }
+            
             let csvContent = "Campanha;Decisao;Motivo simples;Proximos passos;Orcamento sugerido\n";
             campaignsToShow.forEach(campaign => {
                 const metrics = calculateMetrics(campaign);
@@ -1421,12 +1444,15 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
                     orcamentoSugestao = 'Manter';
                 }
 
+                // Garante que os valores não contenham ponto e vírgula ou aspas
+                const cleanValue = (val) => `"${String(val).replace(/"/g, '""').replace(/;/g, ',')}"`;
+
                 const row = [
-                    `"${nomeCampanha}"`,
-                    `"${decisao}"`,
-                    `"${motivo}"`,
-                    `"${sugestoes.join(', ')}"`,
-                    `"${orcamentoSugestao}"`
+                    cleanValue(nomeCampanha),
+                    cleanValue(decisao),
+                    cleanValue(motivo),
+                    cleanValue(sugestoes.join(', ')),
+                    cleanValue(orcamentoSugestao)
                 ].join(';');
                 csvContent += row + "\n";
             });
@@ -1497,8 +1523,8 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
             syncSliders();
             updateDashboard();
 
-            // Event Listeners
-            metaFileInput.addEventListener('change', (event) => {
+            // Event Listeners para os botões de upload
+            document.getElementById('meta-csv-input').addEventListener('change', (event) => {
                 const file = event.target.files[0];
                 if (!file) {
                     showFileError("Nenhum arquivo selecionado.");
@@ -1511,7 +1537,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
                 reader.readAsText(file);
             });
             
-            ga4FileInput.addEventListener('change', (event) => {
+            document.getElementById('ga4-csv-input').addEventListener('change', (event) => {
                 const file = event.target.files[0];
                 if (!file) {
                     showFileError("Nenhum arquivo selecionado.");
