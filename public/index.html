@@ -787,6 +787,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
 
         /**
          * Função principal de parsing de CSV, que detecta o delimitador.
+         * Melhorada para suportar tabulações e remover aspas.
          * @param {string} csvText
          * @returns {Array<Object>}
          */
@@ -799,19 +800,30 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
             let delimiter = ',';
             if (lines[0].includes(';')) {
                 delimiter = ';';
+            } else if (lines[0].includes('\t')) {
+                delimiter = '\t';
             }
 
-            const headers = lines[0].split(delimiter).map(h => normalizeString(h));
+            // A regex lida com vírgulas/pontos e aspas duplas, crucial para o formato do Meta Ads.
+            const splitRegex = new RegExp(`(?:"([^"]*(?:""[^"]*)*)"|([^${delimiter}]*))${delimiter}?`, 'g');
+
+            const headers = lines[0].split(delimiter).map(h => normalizeString(h.replace(/"/g, '')));
             const data = [];
 
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i];
                 if (!line.trim()) continue;
 
-                const values = line.split(delimiter);
+                const values = [];
+                let match;
+                while ((match = splitRegex.exec(line)) !== null) {
+                    // O grupo 1 é para valores entre aspas, o grupo 2 para valores sem aspas.
+                    // O uso de 'match[1] || match[2]' garante que o valor correto é pego, independente do tipo.
+                    values.push(match[1] ? match[1].replace(/""/g, '"') : match[2]);
+                }
+                
                 const row = {};
-
-                for (let j = 0; j < headers.length; j++) {
+                for (let j = 0; j < headers.length && j < values.length; j++) {
                     const header = headers[j];
                     const value = values[j] ? values[j].trim() : '';
 
@@ -1039,7 +1051,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
                     decisao: 'AJUSTAR PÚBLICO',
                     cor: 'amarelo-ajuste',
                     motivo: CONFIG.MESSAGES.AJUSTAR_PUBLICO,
-                    sugestoes: CONFIG.MESSAGES.SUGESTOES.AJUSTO_PUBLICO
+                    sugestoes: CONFIG.MESSAGES.SUGESTOES.AJUSTAR_PUBLICO
                 };
             }
             
@@ -1071,7 +1083,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
             return {
                 decisao: 'MANTER',
                 cor: 'verde-bom',
-                motivo: CONFIG.MESSages.MANTER,
+                motivo: CONFIG.MESSAGES.MANTER,
                 sugestoes: []
             };
         };
@@ -1349,7 +1361,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
                     updateDashboard();
                 } catch (error) {
                     console.error("Erro ao processar o arquivo:", error);
-                    showFileError(`Erro ao processar o arquivo: ${error.message}.`);
+                    showFileError(`Erro ao processar o arquivo. Verifique se o formato está correto.`);
                     loadingMessage.style.display = 'none';
                 }
             }, 100);
