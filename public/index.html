@@ -505,12 +505,12 @@
                 <h3>1. Suba seus dados</h3>
                 <div class="upload-buttons">
                     <div class="input-file">
-                        <label for="meta-csv-input" class="custom-file-upload">Selecione o arquivo</label>
+                        <label for="meta-csv-input" class="custom-file-upload">Meta Ads CSV</label>
                         <input type="file" id="meta-csv-input" accept=".csv">
                         <span id="meta-filename"></span>
                     </div>
                     <div class="input-file">
-                        <label for="ga4-csv-input" class="custom-file-upload">Selecione o arquivo</label>
+                        <label for="ga4-csv-input" class="custom-file-upload">GA4 CSV</label>
                         <input type="file" id="ga4-csv-input" accept=".csv">
                         <span id="ga4-filename"></span>
                     </div>
@@ -1066,7 +1066,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
             return {
                 decisao: 'MANTER',
                 cor: 'verde-bom',
-                motivo: CONFIG.MESSAGES.MANTER,
+                motivo: CONFIG.MESSages.MANTER,
                 sugestoes: []
             };
         };
@@ -1083,6 +1083,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
             if (campaigns.length === 0) {
                 loadingMessage.style.display = 'none';
                 noDataMessage.style.display = 'block';
+                noDataMessage.innerText = "Não foi encontrada nenhuma campanha em comum entre os dois arquivos CSV. Por favor, verifique se os nomes das campanhas estão idênticos.";
                 return;
             }
             noDataMessage.style.display = 'none';
@@ -1329,6 +1330,7 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
         const processData = (source, content) => {
             hideFileError();
             loadingMessage.style.display = 'block';
+            noDataMessage.style.display = 'none';
             dashboardGrid.innerHTML = '';
             
             setTimeout(() => {
