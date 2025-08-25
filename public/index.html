@@ -642,21 +642,24 @@
             // Mapeamento de sinônimos de colunas para normalização
             COLUMNS: {
                 meta: {
-                    'Campanha': ['campanha', 'nome da campanha', 'campaign'],
+                    // Adicionados novos mapeamentos para reconhecer o formato do Meta Ads
+                    'Campanha': ['campanha', 'nome da campanha', 'campaign', 'nome do anúncio', 'nome do conjunto de anúncios'],
                     'Conjunto': ['conjunto', 'ad set'],
                     'Anúncio': ['anúncio', 'ad'],
                     'Impressões': ['impressões', 'impressions'],
                     'Alcance': ['alcance', 'reach'],
-                    'Cliques': ['cliques', 'cliques no link', 'clicks'],
-                    'CTR': ['ctr', 'click-through rate'],
+                    'Cliques': ['cliques', 'cliques no link', 'cliques de saída', 'actions:link_click', 'clicks'],
+                    'CTR': ['ctr', 'click-through rate', 'classificação da taxa de engajamento'],
                     'CPC': ['cpc', 'cost per click'],
                     'CPM': ['cpm', 'cost per mille'],
-                    'Gasto': ['gasto', 'valor usado', 'spend', 'amount spent'],
+                    'Gasto': ['gasto', 'valor usado (brl)', 'spend', 'amount spent'],
                     'Resultados': ['resultados', 'conversões', 'conversions', 'compras', 'purchases'],
-                    'Custo por resultado': ['custo por resultado', 'cost per result'],
+                    'Custo por resultado': ['custo por resultados', 'custo por resultado'],
                     'Data início': ['data início', 'start date'],
                     'Data término': ['data término', 'end date'],
-                    'Receita': ['receita', 'revenue'],
+                    // Mapeamento para as colunas de receita e compras do Meta Ads
+                    'Receita': ['receita', 'revenue', 'valor de conversão da compra', 'valor de conversão da compra no site'],
+                    'Compras': ['compras', 'compras no site', 'purchases']
                 },
                 ga4: {
                     'Campanha': ['campanha', 'campaign'],
@@ -698,7 +701,7 @@
             },
             // Dados de exemplo para teste
             SAMPLE_DATA: {
-                meta: `Campanha,Gasto,Resultados,Cliques,Impressões,Alcance,CTR,Custo por resultado
+                meta: `Nome do anúncio,Valor usado (BRL),Resultados,Cliques no link,Impressões,Alcance,Classificação da taxa de engajamento,Custo por resultados
 Campanha A,500,10,2500,500000,400000,0.5%,50.00
 Campanha B,85,0,100,20000,15000,0.5%,-
 Campanha C,250,5,3000,100000,90000,3.0%,50.00
@@ -901,7 +904,9 @@ Campanha G,50,0,0` // Exemplo de campanha só no GA4
                 }
             });
 
-            return Object.values(joined);
+            // Filtra apenas as campanhas que existem em ambos os conjuntos de dados (não parciais)
+            // A menos que o usuário queira analisar dados parciais
+            return Object.values(joined).filter(c => !c.isPartial);
         };
 
 
